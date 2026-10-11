@@ -1,21 +1,9 @@
 import { useLayoutEffect, useRef } from 'react'
 import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
 import { ingredients } from '../data'
-import { artMap } from './Art'
 import MaskText from './MaskText'
 
-// entrance vectors as fractions of the stage size + spin
-const entrances = [
-  { x: -0.7, y: 0.1, r: -70 }, // strawberry — from the left
-  { x: 0.6, y: -0.1, r: 100 }, // jelly — from the right
-  { x: -0.1, y: 0.8, r: 40 }, // basil — rises from below
-  { x: 0.5, y: 0.7, r: -50 }, // sev — bottom right
-  { x: 0.4, y: -0.8, r: 80 }, // nuts — drops from top right
-  { x: 0.05, y: -0.8, r: -30 }, // syrup — drops from the top
-  { x: 0.05, y: 0.6, r: 0 }, // ice cream — rises, scales up
-]
-const depths = [1, 0.5, 0.35, 0.6, 0.4, 0.45, 0.8]
-
+// Clean readable list: all ingredients stay legible, the active one gets a gold accent.
 export default function Ingredients() {
   const rootRef = useRef(null)
 
@@ -26,26 +14,20 @@ export default function Ingredients() {
 
     mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
       const { mobile } = c.conditions
-      const stage = q('.ing__stage')[0]
-      const flies = q('.ing__fly')
-      const drifts = q('.ing__drift')
       const rows = q('.ing__row')
-      const center = mobile ? [50, 40] : [66, 50]
+      const names = q('.ing__rowName')
+      const bars = q('.ing__bar')
+      const descs = q('.ing__rowLine')
+      const details = q('.ing__detail p')
+      const N = rows.length
 
       gsap.set(q('.ing__head .mask__in'), { yPercent: 140 })
-      gsap.set(q('.ing__eyebrow'), { opacity: 0, y: 20 })
-      gsap.set(rows, { opacity: 0.22, x: mobile ? 0 : -14 })
-      gsap.set(q('.ing__glow'), { scale: 0.3, opacity: 0 })
-
-      gsap.fromTo(
-        stage,
-        { clipPath: 'inset(7% 5% round 36px)' },
-        {
-          clipPath: 'inset(0% 0% round 0px)',
-          ease: 'none',
-          scrollTrigger: { trigger: root, start: 'top bottom', end: 'top top', scrub: true },
-        },
-      )
+      gsap.set(q('.ing__eyebrow, .ing__lead'), { opacity: 0, y: 16 })
+      gsap.set(names, { yPercent: 140 })
+      gsap.set(rows, { opacity: 0 })
+      gsap.set(bars, { scaleY: 0 })
+      gsap.set(descs, { opacity: 0.7 })
+      gsap.set(details, { opacity: 0, y: 12 })
 
       const tl = gsap.timeline({
         defaults: { ease: 'power3.out' },
@@ -53,69 +35,38 @@ export default function Ingredients() {
           id: 'ingredients',
           trigger: root,
           start: 'top top',
-          end: vh(mobile ? 4.2 : 6.2),
+          end: vh(mobile ? 2.6 : 3.6),
           pin: true,
           scrub: 0.8,
           anticipatePin: 1,
           invalidateOnRefresh: true,
         },
       })
+      const T = 1.2 + N * 0.7 + 0.6
 
-      // text reveals in layers
-      tl.to(q('.ing__eyebrow'), { opacity: 1, y: 0, duration: 0.8 }, 0)
-        .to(q('.ing__head .mask__in'), { yPercent: 0, duration: 1.2, stagger: 0.25 }, 0.2)
+      tl.to(q('.ing__eyebrow'), { opacity: 1, y: 0, duration: 0.6 }, 0)
+        .to(q('.ing__head .mask__in'), { yPercent: 0, duration: 1, stagger: 0.12 }, 0.1)
+        .to(q('.ing__lead'), { opacity: 1, y: 0, duration: 0.7 }, 0.6)
+        .fromTo(q('.ing__list'), { y: 14 }, { y: -14, duration: T, ease: 'none' }, 0)
 
-      // background depth: bokeh drifts at different speeds
-      q('.ing__bokeh').forEach((el, i) => {
-        tl.fromTo(el, { y: 40 * (i + 1) }, { y: -120 * (i + 1), duration: 12, ease: 'none' }, 0)
+      // all rows appear (readable), then the highlight travels down the list
+      tl.to(rows, { opacity: 0.72, duration: 0.6, stagger: 0.08, ease: 'power2.out' }, 0.8)
+        .to(names, { yPercent: 0, duration: 0.7, stagger: 0.08 }, 0.8)
+
+      rows.forEach((row, i) => {
+        const at = 1.5 + i * 0.7
+        tl.to(row, { opacity: 1, duration: 0.45, ease: 'power2.out' }, at)
+          .to(bars[i], { scaleY: 1, duration: 0.45, ease: 'power2.out' }, at)
+          .to(descs[i], { opacity: 1, duration: 0.4 }, at)
+          .to(details[i], { opacity: 1, y: 0, duration: 0.5 }, at + 0.1)
+        if (i < N - 1) {
+          tl.to(row, { opacity: 0.72, duration: 0.4, ease: 'power2.inOut' }, at + 0.65)
+            .to(bars[i], { scaleY: 0, duration: 0.35 }, at + 0.65)
+            .to(descs[i], { opacity: 0.7, duration: 0.35 }, at + 0.65)
+            .to(details[i], { opacity: 0, y: -10, duration: 0.35 }, at + 0.6)
+        }
       })
-      tl.to(q('.ing__glow'), { scale: 1, opacity: 0.85, duration: 8, ease: 'none' }, 1)
-
-      ingredients.forEach((ing, i) => {
-        const e = entrances[i]
-        const at = 1 + i * 0.8
-        const W = () => stage.clientWidth
-        const H = () => stage.clientHeight
-        const [px, py] = mobile ? ing.m : ing.d
-
-        // entrance (different direction + depth per ingredient)
-        tl.fromTo(
-          flies[i],
-          { x: () => e.x * W(), y: () => e.y * H(), rotate: e.r, scale: i === 6 ? 0.2 : 0.6, opacity: 0 },
-          { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1, duration: 1.8 },
-          at,
-        )
-        // light up the matching row
-        tl.to(rows[i], { opacity: 1, x: 0, duration: 0.7, ease: 'power2.out' }, at + 0.8)
-
-        // continuous parallax drift (different depth per layer)
-        tl.fromTo(
-          drifts[i],
-          { y: depths[i] * 70, rotate: -6 * depths[i] },
-          { y: -depths[i] * 150, rotate: 8 * depths[i], duration: 12, ease: 'none' },
-          0,
-        )
-
-        // converge toward the centre, as if falling into the glass
-        tl.to(
-          flies[i],
-          {
-            x: () => ((center[0] - px) / 100) * W(),
-            y: () => ((center[1] - py) / 100) * H(),
-            scale: 0.35,
-            rotate: i % 2 ? 40 : -40,
-            duration: 2.4,
-            ease: 'power2.in',
-            immediateRender: false,
-          },
-          9 + i * 0.1,
-        )
-        tl.to(flies[i], { opacity: 0, duration: 0.9, ease: 'none', immediateRender: false }, 10.6 + i * 0.1)
-      })
-
-      tl.to(q('.ing__glow'), { scale: 1.9, opacity: 0, duration: 1.4, ease: 'power2.out' }, 10.8)
-        .to([...q('.ing__head'), ...q('.ing__list')], { opacity: 0, y: -30, duration: 1.2, ease: 'power2.in' }, 10.6)
-        .to({}, { duration: 0.01 }, 12)
+      tl.to({}, { duration: 0.01 }, T)
     }, root)
 
     return () => mm.revert()
@@ -124,51 +75,31 @@ export default function Ingredients() {
   return (
     <section id="ingredients" className="ing" ref={rootRef}>
       <div className="ing__stage">
-        <div className="ing__bg" aria-hidden="true">
-          <span className="ing__bokeh" style={{ left: '8%', top: '70%', width: 220, height: 220 }} />
-          <span className="ing__bokeh" style={{ left: '78%', top: '60%', width: 300, height: 300 }} />
-          <span className="ing__bokeh" style={{ left: '55%', top: '95%', width: 180, height: 180 }} />
-        </div>
-        <div className="ing__glow" aria-hidden="true" />
-
         <div className="ing__head">
           <p className="eyebrow ing__eyebrow">The ingredient story</p>
-          <MaskText as="h2" text="Everything in its place." className="ing__title" />
+          <MaskText as="h2" text="Layered with Intention." className="h-section" />
+          <p className="lead ing__lead">
+            Every ingredient has a purpose. Every layer brings its own texture, flavour, and character.
+          </p>
         </div>
 
         <ul className="ing__list">
           {ingredients.map((ing) => (
-            <li key={ing.id} className="ing__row">
-              <span className="ing__rowName">{ing.name}</span>
+            <li key={ing.name} className="ing__row">
+              <span className="ing__bar" aria-hidden="true" />
+              <span className="mask">
+                <span className="ing__rowName mask__in">{ing.name}</span>
+              </span>
               <span className="ing__rowLine">{ing.line}</span>
             </li>
           ))}
         </ul>
 
-        <div className="ing__items" aria-hidden="true">
-          {ingredients.map((ing) => {
-            const Art = artMap[ing.id]
-            return (
-              <div
-                key={ing.id}
-                className="ing__item"
-                style={{
-                  '--dx': `${ing.d[0]}%`,
-                  '--dy': `${ing.d[1]}%`,
-                  '--ds': ing.d[2],
-                  '--mx': `${ing.m[0]}%`,
-                  '--my': `${ing.m[1]}%`,
-                  '--ms': ing.m[2],
-                }}
-              >
-                <div className="ing__fly">
-                  <div className="ing__drift">
-                    <Art />
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        {/* small screens: the active ingredient's description shows here instead */}
+        <div className="ing__detail" aria-hidden="true">
+          {ingredients.map((ing) => (
+            <p key={ing.name}>{ing.line}</p>
+          ))}
         </div>
       </div>
     </section>

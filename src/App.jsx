@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { ScrollTrigger } from './lib/gsap'
+import FrameBackground from './components/FrameBackground'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
 import Flavours from './components/Flavours'
 import Ingredients from './components/Ingredients'
-import Build from './components/Build'
 import WhyLuma from './components/WhyLuma'
+import Approach from './components/Approach'
 import Testimonials from './components/Testimonials'
 import FinalCTA from './components/FinalCTA'
 import Footer from './components/Footer'
@@ -21,17 +22,20 @@ export default function App() {
 
   return (
     <>
+      <FrameBackground />
       <Nav />
+      <div className="page">
       <main>
         <Hero />
         <Flavours />
         <Ingredients />
-        <Build />
         <WhyLuma />
+        <Approach />
         <Testimonials />
         <FinalCTA />
       </main>
       <Footer />
+      </div>
     </>
   )
 }

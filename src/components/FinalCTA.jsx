@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, scrollToId, vh } from '../lib/gsap'
 import MaskText from './MaskText'
 
 export default function FinalCTA() {
@@ -15,43 +15,33 @@ export default function FinalCTA() {
       const { mobile } = c.conditions
 
       gsap.set(q('.cta__title .mask__in'), { yPercent: 140 })
-      gsap.set(q('.cta__eyebrow'), { opacity: 0, y: 20 })
-      gsap.set(q('.cta__text'), { opacity: 0, y: 24 })
-      gsap.set(q('.cta__btn'), { opacity: 0, y: 30, scale: 0.94 })
+      gsap.set(q('.cta__eyebrow'), { opacity: 0, y: 16 })
+      gsap.set(q('.cta__text'), { opacity: 0, y: 20 })
+      gsap.set(q('.cta__btns .btn'), { opacity: 0, y: 24 })
       gsap.set(q('.cta__glow'), { scale: 0.5, opacity: 0 })
 
-      gsap.fromTo(
-        q('.cta__stage'),
-        { clipPath: 'inset(7% 5% round 36px)' },
-        {
-          clipPath: 'inset(0% 0% round 0px)',
-          ease: 'none',
-          scrollTrigger: { trigger: root, start: 'top bottom', end: 'top top', scrub: true },
-        },
-      )
-
-      const tl = gsap.timeline({
-        defaults: { ease: 'power3.out' },
-        scrollTrigger: {
-          id: 'cta',
-          trigger: root,
-          start: 'top top',
-          end: vh(mobile ? 1.8 : 2.4),
-          pin: true,
-          scrub: 0.8,
-          anticipatePin: 1,
-          invalidateOnRefresh: true,
-        },
-      })
-      tl.fromTo(q('.cta__bg img'), { scale: 1 }, { scale: mobile ? 1.18 : 1.3, duration: 6, ease: 'none' }, 0)
-        .fromTo(q('.cta__shade'), { opacity: 0.85 }, { opacity: 0.45, duration: 2.5, ease: 'none' }, 0)
+      gsap
+        .timeline({
+          defaults: { ease: 'power3.out' },
+          scrollTrigger: {
+            id: 'cta',
+            trigger: root,
+            start: 'top top',
+            end: vh(mobile ? 1.2 : 1.6),
+            pin: true,
+            scrub: 0.8,
+            anticipatePin: 1,
+            invalidateOnRefresh: true,
+          },
+        })
+        .to(q('.cta__shade'), { opacity: 0.8, duration: 2.5, ease: 'none' }, 0)
         .to(q('.cta__glow'), { scale: 1.15, opacity: 1, duration: 3, ease: 'power2.out' }, 0)
-        .to(q('.cta__eyebrow'), { opacity: 1, y: 0, duration: 0.8 }, 0.2)
-        .to(q('.cta__title .mask__in'), { yPercent: 0, duration: 1.1, stagger: 0.18 }, 0.4)
-        .to(q('.cta__text'), { opacity: 1, y: 0, duration: 0.9 }, 1.7)
-        .to(q('.cta__btn'), { opacity: 1, y: 0, scale: 1, duration: 0.9 }, 2.2)
+        .to(q('.cta__eyebrow'), { opacity: 1, y: 0, duration: 0.6 }, 0.1)
+        .to(q('.cta__title .mask__in'), { yPercent: 0, duration: 1, stagger: 0.12 }, 0.25)
+        .to(q('.cta__text'), { opacity: 1, y: 0, duration: 0.8 }, 1.1)
+        .to(q('.cta__btns .btn'), { opacity: 1, y: 0, duration: 0.8, stagger: 0.15 }, 1.5)
         .to(q('.cta__glow'), { scale: 1.35, duration: 3, ease: 'none' }, 3)
-        .to({}, { duration: 0.01 }, 6)
+        .to({}, { duration: 0.01 }, 5)
     }, root)
 
     return () => mm.revert()
@@ -63,7 +53,7 @@ export default function FinalCTA() {
     const ctx = cv.getContext('2d')
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const mobile = window.matchMedia(MOBILE_QUERY).matches
-    const count = mobile ? 24 : 55
+    const count = mobile ? 22 : 46
     let W = 0
     let H = 0
     let raf = 0
@@ -73,11 +63,11 @@ export default function FinalCTA() {
     const spawn = (initial) => ({
       x: Math.random() * W,
       y: initial ? Math.random() * H : H + 10,
-      r: 1 + Math.random() * 2.6,
-      v: 12 + Math.random() * 34, // px / second
+      r: 1 + Math.random() * 2.4,
+      v: 12 + Math.random() * 30,
       ph: Math.random() * Math.PI * 2,
       sw: 6 + Math.random() * 18,
-      a: 0.25 + Math.random() * 0.55,
+      a: 0.2 + Math.random() * 0.45,
       hue: Math.random() < 0.7 ? '255,205,130' : '255,140,165',
     })
 
@@ -138,27 +128,38 @@ export default function FinalCTA() {
   return (
     <section id="cta" className="cta" ref={rootRef}>
       <div className="cta__stage">
-        <div className="cta__bg" aria-hidden="true">
-          <img src="/hero_frames/ezgif-frame-120.jpg" alt="" loading="lazy" decoding="async" draggable="false" />
-        </div>
         <div className="cta__shade" aria-hidden="true" />
         <div className="cta__glow" aria-hidden="true" />
         <canvas ref={canvasRef} className="cta__particles" aria-hidden="true" />
 
         <div className="cta__content">
-          <p className="eyebrow cta__eyebrow">Your turn</p>
-          <MaskText as="h2" text="One More Layer of Happiness." className="cta__title" />
-          <p className="cta__text">Six flavours. Seven layers. One glass you will think about all week.</p>
-          <a
-            className="btn btn--primary btn--lg cta__btn"
-            href="#footer"
-            onClick={(e) => {
-              e.preventDefault()
-              window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
-            }}
-          >
-            Order Your LUMA
-          </a>
+          <p className="eyebrow cta__eyebrow">Your next layer</p>
+          <MaskText as="h2" text="Ready for a LUMA?" className="h-section h-section--lg cta__title" />
+          <p className="lead cta__text">
+            Choose your flavour and enjoy Falooda built with texture, freshness, and balance.
+          </p>
+          <div className="cta__btns">
+            <a
+              className="btn btn--primary btn--lg"
+              href="#footer"
+              onClick={(e) => {
+                e.preventDefault()
+                window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
+              }}
+            >
+              Order Now
+            </a>
+            <a
+              className="btn btn--ghost btn--lg"
+              href="#flavours"
+              onClick={(e) => {
+                e.preventDefault()
+                scrollToId('flavours')
+              }}
+            >
+              Explore Flavours
+            </a>
+          </div>
         </div>
       </div>
     </section>

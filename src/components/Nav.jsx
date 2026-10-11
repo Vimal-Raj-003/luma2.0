@@ -13,7 +13,7 @@ export default function Nav() {
       </a>
       <nav className="nav__links" aria-label="Primary">
         <a href="#flavours" onClick={go('flavours')}>Flavours</a>
-        <a href="#why" onClick={go('why')}>Story</a>
+        <a href="#story" onClick={go('approach')}>Our Story</a>
         <a className="nav__order" href="#cta" onClick={go('cta')}>Order</a>
       </nav>
     </header>
