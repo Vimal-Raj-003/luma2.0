@@ -4,7 +4,6 @@ import { FRAME_COUNT, frameSrc } from '../data'
 
 const SRC_W = 1920
 const SRC_H = 1080
-const FOCUS_X = 0.62 // the glass sits ~62% across the frame
 const LAST = FRAME_COUNT - 1
 
 // Where each part of the page sits in the frame sequence (fraction of frames).
@@ -19,22 +18,38 @@ const STOPS = [
   ['cta', 0.92],
 ]
 
+// Contain-style framing. The glass (plus scoop and splash) occupies a fixed box in
+// the source frame; that box is fitted into a "safe rectangle" of the viewport so the
+// whole product stays visible at every size. Leftover space is filled by a soft,
+// blurred copy of the same frame (see draw()).
+const BOX = { x0: 860, x1: 1520, y0: 40, y1: 1040 }
+const BOX_CX = 1190
+const BOX_CY = 540
+
+function placement(cw, ch) {
+  const mobile = cw <= 900
+  const safe = mobile
+    ? { x0: cw * 0.06, x1: cw * 0.94, y0: ch * 0.22, y1: ch * 0.7 } // text lives below, heading above
+    : { x0: cw * 0.42, x1: cw * 0.97, y0: 84, y1: ch - 28 } // product right of centre, clear of the nav
+  const sc = Math.min((safe.x1 - safe.x0) / (BOX.x1 - BOX.x0), (safe.y1 - safe.y0) / (BOX.y1 - BOX.y0))
+  const dw = SRC_W * sc
+  const dh = SRC_H * sc
+  let left = (safe.x0 + safe.x1) / 2 - BOX_CX * sc
+  let top = (safe.y0 + safe.y1) / 2 - BOX_CY * sc
+  // keep the frame inside the viewport when it is smaller, centred-in-range when larger
+  left = dw <= cw ? Math.min(Math.max(left, 0), cw - dw) : Math.min(Math.max(left, cw - dw), 0)
+  top = dh <= ch ? Math.min(Math.max(top, 0), ch - dh) : Math.min(Math.max(top, ch - dh), 0)
+  return { left, top, dw, dh }
+}
+
 function buildSpec(el) {
   const cw = el.clientWidth || window.innerWidth
   const ch = el.clientHeight || window.innerHeight
-  const dpr = Math.min(window.devicePixelRatio || 1, 2)
-  const aspect = cw / ch
-  let sx = 0, sy = 0, sw = SRC_W, sh = SRC_H
-  if (aspect < SRC_W / SRC_H) {
-    sw = Math.round(SRC_H * aspect)
-    sx = Math.min(Math.max(FOCUS_X * SRC_W - sw / 2, 0), SRC_W - sw)
-  } else {
-    sh = Math.round(SRC_W / aspect)
-    sy = Math.round((SRC_H - sh) / 2)
-  }
-  const bw = Math.min(sw, Math.round(cw * dpr), 1280)
-  const k = bw / sw
-  return { sx: Math.round(sx), sy, sw, sh, bw, bh: Math.round(sh * k), aspect }
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+  const p = placement(cw, ch)
+  const cap = cw <= 900 ? 960 : 1280
+  const bw = Math.min(SRC_W, cap, Math.max(320, Math.round(p.dw * dpr)))
+  return { sx: 0, sy: 0, sw: SRC_W, sh: SRC_H, bw, bh: Math.round((bw * SRC_H) / SRC_W), aspect: cw / ch }
 }
 
 async function loadFrames(spec, bag, onFrame, token) {
@@ -89,7 +104,16 @@ export default function FrameBackground() {
       token: { cancelled: false },
       dead: false,
       breaks: null,
+      pl: { left: 0, top: 0, dw: 0, dh: 0, feather: false },
     }
+    const tiny = document.createElement('canvas')
+    tiny.width = 96
+    tiny.height = 54
+    const tinyCtx = tiny.getContext('2d')
+    const tmp = document.createElement('canvas')
+    const tmpCtx = tmp.getContext('2d')
+    const mask = document.createElement('canvas')
+    const mctx = mask.getContext('2d')
     const proxy = { frame: 0 }
     const smooth = gsap.quickTo(proxy, 'frame', { duration: 0.7, ease: 'power3.out' })
 
@@ -105,10 +129,26 @@ export default function FrameBackground() {
     const draw = (i) => {
       const bmp = nearest(i)
       if (!bmp) return false
-      const k = Math.max(s.W / bmp.width, s.H / bmp.height)
-      const dw = bmp.width * k
-      const dh = bmp.height * k
-      c2d.drawImage(bmp, (s.W - dw) / 2, (s.H - dh) / 2, dw, dh)
+      const { left, top, dw, dh, feather } = s.pl
+      // soft backdrop: tiny copy of the frame, stretched to cover (reads as blur)
+      tinyCtx.drawImage(bmp, 0, 0, tiny.width, tiny.height)
+      const k = Math.max(s.W / tiny.width, s.H / tiny.height)
+      c2d.imageSmoothingEnabled = true
+      c2d.drawImage(tiny, (s.W - tiny.width * k) / 2, (s.H - tiny.height * k) / 2, tiny.width * k, tiny.height * k)
+      // keep the backdrop ambient, not a second product
+      c2d.fillStyle = 'rgba(14, 5, 8, 0.62)'
+      c2d.fillRect(0, 0, s.W, s.H)
+      // sharp, fully framed product
+      if (feather) {
+        tmpCtx.globalCompositeOperation = 'source-over'
+        tmpCtx.clearRect(0, 0, tmp.width, tmp.height)
+        tmpCtx.drawImage(bmp, 0, 0, tmp.width, tmp.height)
+        tmpCtx.globalCompositeOperation = 'destination-in'
+        tmpCtx.drawImage(mask, 0, 0)
+        c2d.drawImage(tmp, left, top)
+      } else {
+        c2d.drawImage(bmp, left, top, dw, dh)
+      }
       return true
     }
     const tick = () => {
@@ -116,6 +156,7 @@ export default function FrameBackground() {
       if (idx !== s.lastDrawn && draw(idx)) s.lastDrawn = idx
     }
     gsap.ticker.add(tick)
+    if (import.meta.env.DEV) window.__lumaFrame = () => [proxy.frame, s.lastDrawn] // dev-only debugging hook
 
     const resizeCanvas = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
@@ -125,6 +166,40 @@ export default function FrameBackground() {
       s.W = canvas.width = W
       s.H = canvas.height = H
       c2d.imageSmoothingQuality = 'high'
+      // placement in device pixels
+      const p = placement(canvas.clientWidth, canvas.clientHeight)
+      const k = W / canvas.clientWidth
+      const pl = { left: p.left * k, top: p.top * k, dw: p.dw * k, dh: p.dh * k }
+      const F = Math.round(Math.min(W, H) * 0.07)
+      const fl = pl.left > 1 ? F : 0
+      const fr = pl.left + pl.dw < W - 1 ? F : 0
+      const ft = pl.top > 1 ? F : 0
+      const fb = pl.top + pl.dh < H - 1 ? F : 0
+      pl.feather = fl || fr || ft || fb
+      s.pl = pl
+      if (pl.feather) {
+        const mw = Math.max(1, Math.round(pl.dw))
+        const mh = Math.max(1, Math.round(pl.dh))
+        tmp.width = mask.width = mw
+        tmp.height = mask.height = mh
+        mctx.globalCompositeOperation = 'source-over'
+        mctx.clearRect(0, 0, mw, mh)
+        mctx.fillStyle = '#fff'
+        mctx.fillRect(0, 0, mw, mh)
+        mctx.globalCompositeOperation = 'destination-in'
+        const ramp = (horizontal, a, b) => {
+          const len = horizontal ? mw : mh
+          const g = horizontal ? mctx.createLinearGradient(0, 0, mw, 0) : mctx.createLinearGradient(0, 0, 0, mh)
+          g.addColorStop(0, a ? 'rgba(0,0,0,0)' : '#000')
+          if (a) g.addColorStop(Math.min(a / len, 0.49), '#000')
+          if (b) g.addColorStop(Math.max(1 - b / len, 0.51), '#000')
+          g.addColorStop(1, b ? 'rgba(0,0,0,0)' : '#000')
+          mctx.fillStyle = g
+          mctx.fillRect(0, 0, mw, mh)
+        }
+        if (fl || fr) ramp(true, fl, fr)
+        if (ft || fb) ramp(false, ft, fb)
+      }
       s.lastDrawn = -1
     }
 

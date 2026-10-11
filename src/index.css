@@ -1073,3 +1073,13 @@ html.is-loading .nav {
     font-size: 0.88rem;
   }
 }
+
+/* keep the final CTA copy clear of the product on mid-width desktops */
+@media (min-width: 901px) {
+  .cta__content {
+    width: min(42vw, 640px);
+  }
+  .h-section--lg {
+    font-size: clamp(2.6rem, 4.6vw, 5.4rem);
+  }
+}
