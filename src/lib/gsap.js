@@ -11,6 +11,7 @@ if (import.meta.env.DEV) window.ScrollTrigger = ScrollTrigger // dev-only: handy
 
 export const MOBILE_QUERY = '(max-width: 900px)'
 export const DESKTOP_QUERY = '(min-width: 901px)'
+export const REDUCE_QUERY = '(prefers-reduced-motion: reduce)'
 
 // Pin lengths are expressed in viewport heights; shortened on mobile.
 export const vh = (n) => () => `+=${Math.round(window.innerHeight * n)}`

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ScrollTrigger } from './lib/gsap'
+import { ScrollTrigger, scrollToId } from './lib/gsap'
 import FrameBackground from './components/FrameBackground'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
@@ -22,6 +22,16 @@ export default function App() {
 
   return (
     <>
+      <a
+        className="skip"
+        href="#flavours"
+        onClick={(e) => {
+          e.preventDefault()
+          scrollToId('flavours')
+        }}
+      >
+        Skip to content
+      </a>
       <FrameBackground />
       <Nav />
       <div className="page">

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
 import MaskText from './MaskText'
 
 // Short brand statement. One brief pin, then the page flows on.
@@ -11,12 +11,13 @@ export default function Approach() {
     const q = gsap.utils.selector(root)
     const mm = gsap.matchMedia()
 
-    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
-      const { mobile } = c.conditions
+    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY, reduce: REDUCE_QUERY }, (c) => {
+      const { mobile, reduce } = c.conditions
+      const still = mobile || reduce // no scroll-linked drift on phones or with reduced motion
       gsap.set(q('.apr__title .mask__in'), { yPercent: 140 })
       gsap.set(q('.apr__eyebrow, .apr__lead, .apr__note'), { opacity: 0, y: 18 })
 
-      gsap
+      const tl = gsap
         .timeline({
           defaults: { ease: 'power3.out' },
           scrollTrigger: {
@@ -34,8 +35,8 @@ export default function Approach() {
         .to(q('.apr__title .mask__in'), { yPercent: 0, duration: 0.9, stagger: 0.12 }, 0.1)
         .to(q('.apr__lead'), { opacity: 1, y: 0, duration: 0.7 }, 0.8)
         .to(q('.apr__note'), { opacity: 1, y: 0, duration: 0.7 }, 1.3)
-        .fromTo(q('.apr__block'), { y: 16 }, { y: -16, duration: 2.6, ease: 'none' }, 0)
         .to({}, { duration: 0.01 }, 2.6)
+      if (!still) tl.fromTo(q('.apr__block'), { y: 16 }, { y: -16, duration: 2.6, ease: 'none' }, 0)
     }, root)
 
     return () => mm.revert()

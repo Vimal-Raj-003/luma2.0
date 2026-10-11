@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
 import { ingredients } from '../data'
 import MaskText from './MaskText'
 
@@ -12,8 +12,9 @@ export default function Ingredients() {
     const q = gsap.utils.selector(root)
     const mm = gsap.matchMedia()
 
-    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
-      const { mobile } = c.conditions
+    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY, reduce: REDUCE_QUERY }, (c) => {
+      const { mobile, reduce } = c.conditions
+      const still = mobile || reduce // no scroll-linked drift on phones or with reduced motion
       const rows = q('.ing__row')
       const names = q('.ing__rowName')
       const bars = q('.ing__bar')
@@ -47,11 +48,12 @@ export default function Ingredients() {
       tl.to(q('.ing__eyebrow'), { opacity: 1, y: 0, duration: 0.6 }, 0)
         .to(q('.ing__head .mask__in'), { yPercent: 0, duration: 1, stagger: 0.12 }, 0.1)
         .to(q('.ing__lead'), { opacity: 1, y: 0, duration: 0.7 }, 0.6)
-        .fromTo(q('.ing__list'), { y: 14 }, { y: -14, duration: T, ease: 'none' }, 0)
 
       // all rows appear (readable), then the highlight travels down the list
       tl.to(rows, { opacity: 0.72, duration: 0.6, stagger: 0.08, ease: 'power2.out' }, 0.8)
         .to(names, { yPercent: 0, duration: 0.7, stagger: 0.08 }, 0.8)
+
+      if (!still) tl.fromTo(q('.ing__list'), { y: 14 }, { y: -14, duration: T, ease: 'none' }, 0)
 
       rows.forEach((row, i) => {
         const at = 1.5 + i * 0.7

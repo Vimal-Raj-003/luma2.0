@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, scrollToId, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, scrollToId, vh } from '../lib/gsap'
 import MaskText from './MaskText'
 
 export default function FinalCTA() {
@@ -9,6 +9,7 @@ export default function FinalCTA() {
   useLayoutEffect(() => {
     const root = rootRef.current
     const q = gsap.utils.selector(root)
+    if (window.matchMedia(REDUCE_QUERY).matches) return
     const mm = gsap.matchMedia()
 
     mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
@@ -53,7 +54,7 @@ export default function FinalCTA() {
     const ctx = cv.getContext('2d')
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const mobile = window.matchMedia(MOBILE_QUERY).matches
-    const count = mobile ? 22 : 46
+    const count = mobile ? 10 : 40
     let W = 0
     let H = 0
     let raf = 0

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
 import { whyLuma } from '../data'
 import MaskText from './MaskText'
 
@@ -14,8 +14,9 @@ export default function WhyLuma() {
     const q = gsap.utils.selector(root)
     const mm = gsap.matchMedia()
 
-    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
-      const { mobile } = c.conditions
+    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY, reduce: REDUCE_QUERY }, (c) => {
+      const { mobile, reduce } = c.conditions
+      const still = mobile || reduce // no scroll-linked drift on phones or with reduced motion
       const N = whyLuma.length
       const tints = q('.why__tint')
       const panels = q('.why__panel')
@@ -53,7 +54,8 @@ export default function WhyLuma() {
         .to(q('.why__head .mask__in'), { yPercent: 0, duration: 0.9, stagger: 0.1 }, 0.1)
         .to(lines(panels[0]), { yPercent: 0, duration: 0.8 }, 0.5)
         .to(body(panels[0]), { opacity: 1, y: 0, duration: 0.6, stagger: 0.1 }, 0.7)
-        .fromTo(q('.why__pos'), { y: 14 }, { y: -14, duration: total, ease: 'none' }, 0)
+
+      if (!still) tl.fromTo(q('.why__pos'), { y: 14 }, { y: -14, duration: total, ease: 'none' }, 0)
 
       for (let k = 1; k < N; k++) {
         const t = tk(k)

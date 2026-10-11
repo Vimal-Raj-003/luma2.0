@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
 import { quotes } from '../data'
 import MaskText from './MaskText'
 
@@ -12,8 +12,9 @@ export default function Testimonials() {
     const q = gsap.utils.selector(root)
     const mm = gsap.matchMedia()
 
-    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
-      const { mobile } = c.conditions
+    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY, reduce: REDUCE_QUERY }, (c) => {
+      const { mobile, reduce } = c.conditions
+      const still = mobile || reduce // no scroll-linked drift on phones or with reduced motion
       const items = q('.tst__q')
       const words = (el) => el.querySelectorAll('.mask__in')
       const cap = (el) => el.querySelectorAll('.tst__cap')
@@ -46,7 +47,8 @@ export default function Testimonials() {
       tl.to(q('.tst__eyebrow'), { opacity: 1, y: 0, duration: 0.5 }, 0)
         .to(words(items[0]), { yPercent: 0, duration: 0.9, stagger: 0.04 }, 0.1)
         .to(cap(items[0]), { opacity: 1, y: 0, duration: 0.6 }, 0.9)
-        .fromTo(q('.tst__stack'), { y: 14 }, { y: -14, duration: total, ease: 'none' }, 0)
+
+      if (!still) tl.fromTo(q('.tst__stack'), { y: 14 }, { y: -14, duration: total, ease: 'none' }, 0)
 
       for (let k = 1; k < N; k++) {
         const t = hold + (k - 1) * step

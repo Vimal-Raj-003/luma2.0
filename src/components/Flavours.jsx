@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
 import { flavours } from '../data'
 import MaskText from './MaskText'
 
@@ -14,8 +14,9 @@ export default function Flavours() {
     const q = gsap.utils.selector(root)
     const mm = gsap.matchMedia()
 
-    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
-      const { mobile } = c.conditions
+    mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY, reduce: REDUCE_QUERY }, (c) => {
+      const { mobile, reduce } = c.conditions
+      const still = mobile || reduce // no scroll-linked drift on phones or with reduced motion
       const N = flavours.length
       const tints = q('.flv__tint')
       const names = q('.flv__name .mask__in')
@@ -48,7 +49,8 @@ export default function Flavours() {
       tl.to(q('.flv__eyebrow'), { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0)
         .to(q('.flv__head .mask__in'), { yPercent: 0, duration: 0.8, stagger: 0.1, ease: 'power3.out' }, 0.1)
         .to(q('.flv__lead'), { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' }, 0.5)
-        .fromTo(q('.flv__panel'), { y: 16 }, { y: -16, duration: N, ease: 'none' }, 0)
+
+      if (!still) tl.fromTo(q('.flv__panel'), { y: 16 }, { y: -16, duration: N, ease: 'none' }, 0)
 
       for (let k = 1; k < N; k++) {
         const t = k - 0.3

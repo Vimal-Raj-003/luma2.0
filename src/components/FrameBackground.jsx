@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { gsap, ScrollTrigger } from '../lib/gsap'
+import { gsap, ScrollTrigger, REDUCE_QUERY } from '../lib/gsap'
 import { FRAME_COUNT, frameSrc } from '../data'
 
 const SRC_W = 1920
 const SRC_H = 1080
 const LAST = FRAME_COUNT - 1
+const STILL_FRAME = 108 // stable, fully built glass shown when reduced motion is requested
 
 // Where each part of the page sits in the frame sequence (fraction of frames).
 // Scroll positions come from the sections' own ScrollTriggers.
@@ -154,7 +155,11 @@ export default function FrameBackground() {
       }
       return true
     }
-    const tick = () => {
+    let lastT = 0
+    const tick = (time) => {
+      // phones: cap redraws at ~30fps (smoothing still interpolates, the story is unchanged)
+      if (canvas.clientWidth <= 900 && time - lastT < 0.033) return
+      lastT = time
       const idx = Math.min(LAST, Math.max(0, Math.round(proxy.frame)))
       if (idx !== s.lastDrawn && draw(idx)) {
         s.lastDrawn = idx
@@ -247,7 +252,9 @@ export default function FrameBackground() {
       } else smooth(target)
     }
 
-    const globalST = ScrollTrigger.create({
+    const reduce = window.matchMedia(REDUCE_QUERY).matches
+    if (reduce) proxy.frame = STILL_FRAME
+    const globalST = reduce ? null : ScrollTrigger.create({
       id: 'global-frames',
       trigger: document.documentElement,
       start: 0,
@@ -258,7 +265,7 @@ export default function FrameBackground() {
       s.breaks = null
       sync(true)
     }
-    ScrollTrigger.addEventListener('refresh', onRefresh)
+    if (!reduce) ScrollTrigger.addEventListener('refresh', onRefresh)
 
     // ---- background loading (silent) -------------------------------------
     const onFrame = () => {
@@ -301,7 +308,7 @@ export default function FrameBackground() {
       clearTimeout(rt)
       gsap.ticker.remove(tick)
       gsap.killTweensOf(proxy)
-      globalST.kill()
+      globalST?.kill()
       ScrollTrigger.removeEventListener('refresh', onRefresh)
       window.removeEventListener('resize', onResize)
       s.bag.forEach((b) => b && b.close())

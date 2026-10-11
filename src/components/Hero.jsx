@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, scrollToId, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, scrollToId, vh } from '../lib/gsap'
 import MaskText from './MaskText'
 
 // Foreground only: the animated background lives in <FrameBackground />.
@@ -9,6 +9,8 @@ export default function Hero() {
   useLayoutEffect(() => {
     const root = rootRef.current
     const q = gsap.utils.selector(root)
+    // reduced motion: show the finished hero — no intro, no pin
+    if (window.matchMedia(REDUCE_QUERY).matches) return
 
     const ctx = gsap.context(() => {
       gsap.set(q('.hero__eyebrow'), { opacity: 0, y: 14 })

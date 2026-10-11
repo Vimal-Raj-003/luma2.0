@@ -1049,3 +1049,91 @@ p {
     font-size: clamp(2.6rem, 4.6vw, 5.4rem);
   }
 }
+
+/* =====================================================================
+   QA pass: touch targets, hover fallbacks, short screens, skip link
+   ===================================================================== */
+.skip {
+  position: fixed;
+  left: 12px;
+  top: -80px;
+  z-index: 20;
+  padding: 0.8rem 1.2rem;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--wine);
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: top 0.2s ease;
+}
+.skip:focus-visible {
+  top: 12px;
+}
+
+/* every link/button in the nav and footer gets a comfortable 44px target */
+.nav__logo,
+.nav__links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.foot__links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.foot__links a::after {
+  bottom: 8px;
+}
+.foot__links {
+  gap: 0 2.8rem;
+}
+
+/* hover motion only where hover exists; nothing depends on it */
+@media (hover: none) {
+  .btn:hover {
+    transform: none;
+  }
+}
+
+/* short desktop/laptop screens (e.g. 1280x720): tighten the ingredient list so it never meets the intro */
+@media (min-width: 901px) and (max-height: 800px) {
+  .ing__head {
+    top: 11vh;
+  }
+  .ing__list {
+    bottom: 4vh;
+    padding: 8px 22px;
+  }
+  .ing__row {
+    min-height: 2.9rem;
+    padding: 0.3rem 0 0.3rem 18px;
+  }
+  .ing__rowLine {
+    font-size: 0.86rem;
+    line-height: 1.4;
+  }
+}
+
+/* very large screens: keep the copy blocks from drifting too far from the product */
+@media (min-width: 1700px) {
+  :root {
+    --pad: clamp(72px, 6vw, 140px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .bgposter,
+  #poster,
+  .skip {
+    transition: none;
+  }
+  .btn {
+    transition: none;
+  }
+}

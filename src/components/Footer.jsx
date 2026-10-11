@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, scrollToId } from '../lib/gsap'
+import { gsap, REDUCE_QUERY, scrollToId } from '../lib/gsap'
 
 export default function Footer() {
   const rootRef = useRef(null)
@@ -7,6 +7,7 @@ export default function Footer() {
   useLayoutEffect(() => {
     const root = rootRef.current
     const q = gsap.utils.selector(root)
+    if (window.matchMedia(REDUCE_QUERY).matches) return
 
     const ctx = gsap.context(() => {
       gsap.set(q('.foot__line'), { scaleX: 0, transformOrigin: '0% 50%' })
