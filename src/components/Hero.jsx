@@ -44,11 +44,13 @@ export default function Hero() {
           invalidateOnRefresh: true,
         },
       })
-      tl.to(q('.hero__cue'), { opacity: 0, duration: 0.6, ease: 'none' }, 0)
-        .to(q('.hero__headline .mask__in'), { yPercent: 0, duration: 1.4, stagger: 0.5, ease: 'power3.out' }, 0.3)
-        .to(q('.hero__sub'), { clipPath: 'inset(0 0% 0 0)', opacity: 1, x: 0, duration: 1.4 }, 2.2)
-        .to(q('.hero__cta .btn'), { opacity: 1, y: 0, duration: 1, stagger: 0.2 }, 3.4)
-        .to({}, { duration: 1.2 }, 4.4)
+      // Timeline is 10 units = the whole hero scroll. 0-10%: product + small LUMA/eyebrow only;
+      // headline 15-30%; subtext 30-50%; CTA 50-65%; the rest is a short hold.
+      tl.to(q('.hero__cue'), { opacity: 0, duration: 0.4, ease: 'none' }, 0)
+        .to(q('.hero__headline .mask__in'), { yPercent: 0, duration: 1.5, stagger: 0.35, ease: 'power3.out' }, 1.5)
+        .to(q('.hero__sub'), { clipPath: 'inset(0 0% 0 0)', opacity: 1, x: 0, duration: 2, ease: 'power2.out' }, 3)
+        .to(q('.hero__cta .btn'), { opacity: 1, y: 0, duration: 1.3, stagger: 0.25, ease: 'power2.out' }, 5)
+        .to({}, { duration: 0.01 }, 10)
     })
 
     return () => {
@@ -67,7 +69,7 @@ export default function Hero() {
         <MaskText as="h1" text="LUMA" chars className="hero__logo" />
         <MaskText as="p" text="Layers Worth Savoring." className="hero__headline" />
         <p className="hero__sub">
-          A modern take on Falooda — rich, refreshing, and carefully layered from the first sip to the last.
+          A modern Falooda experience — layered with flavour, texture, and freshness.
         </p>
         <div className="hero__cta">
           <a

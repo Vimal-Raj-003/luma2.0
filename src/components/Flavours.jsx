@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { gsap, MOBILE_QUERY, DESKTOP_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
+import { gsap, MOBILE_QUERY, DESKTOP_QUERY, PORTRAIT_SMALL_QUERY, REDUCE_QUERY, vh } from '../lib/gsap'
 import { flavours } from '../data'
 import MaskText from './MaskText'
 
@@ -16,6 +16,7 @@ export default function Flavours() {
 
     mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY, reduce: REDUCE_QUERY }, (c) => {
       const { mobile, reduce } = c.conditions
+      const horizontal = window.matchMedia(PORTRAIT_SMALL_QUERY).matches // rail is horizontal only in the portrait stack
       const still = mobile || reduce // no scroll-linked drift on phones or with reduced motion
       const N = flavours.length
       const tints = q('.flv__tint')
@@ -65,7 +66,7 @@ export default function Flavours() {
           .to(descs[k], { opacity: 1, y: 0, duration: d * 0.7 }, t + d * 0.35)
           .to(items[k - 1], { opacity: 0.6, duration: d * 0.6 }, t)
           .to(items[k], { opacity: 1, duration: d * 0.6 }, t + d * 0.2)
-          .to(q('.flv__marker'), mobile ? { xPercent: k * 100, duration: d } : { yPercent: k * 100, duration: d }, t)
+          .to(q('.flv__marker'), horizontal ? { xPercent: k * 100, duration: d } : { yPercent: k * 100, duration: d }, t)
       }
       tl.to({}, { duration: 0.01 }, N)
     }, root)

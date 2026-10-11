@@ -9,8 +9,11 @@ ScrollTrigger.config({ ignoreMobileResize: true })
 
 if (import.meta.env.DEV) window.ScrollTrigger = ScrollTrigger // dev-only: handy for debugging pins
 
-export const MOBILE_QUERY = '(max-width: 900px)'
-export const DESKTOP_QUERY = '(min-width: 901px)'
+// "mobile" = phones/small tablets in portrait, or anything short (phones in landscape)
+export const MOBILE_QUERY = '(max-width: 900px), (max-height: 520px)'
+export const DESKTOP_QUERY = '(min-width: 901px) and (min-height: 521px)'
+// layouts that stack text under the product (rail becomes horizontal)
+export const PORTRAIT_SMALL_QUERY = '(max-width: 900px) and (min-height: 521px)'
 export const REDUCE_QUERY = '(prefers-reduced-motion: reduce)'
 
 // Pin lengths are expressed in viewport heights; shortened on mobile.

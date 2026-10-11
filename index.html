@@ -28,9 +28,9 @@
     <div id="poster" aria-hidden="true"><img id="poster-bg" src="/hero_frames/ezgif-frame-001.jpg" alt="" decoding="async" draggable="false" /><img id="poster-img" src="/hero_frames/ezgif-frame-001.jpg" alt="" fetchpriority="high" decoding="async" draggable="false" /></div>
     <script>
       (function () {
-        var W = innerWidth, H = innerHeight, m = W <= 900;
-        var x0 = m ? W * 0.06 : W * 0.42, x1 = m ? W * 0.94 : W * 0.97;
-        var y0 = m ? H * 0.22 : 84, y1 = m ? H * 0.7 : H - 28;
+        var W = innerWidth, H = innerHeight, sh = H <= 520, m = W <= 900 && !sh;
+        var x0 = sh ? W * 0.56 : m ? W * 0.06 : W * 0.42, x1 = sh ? W * 0.97 : m ? W * 0.94 : W * 0.97;
+        var y0 = sh ? 58 : m ? H * 0.22 : 84, y1 = sh ? H - 10 : m ? H * 0.7 : H - 28;
         var sc = Math.min((x1 - x0) / 660, (y1 - y0) / 1000), dw = 1920 * sc, dh = 1080 * sc;
         var l = (x0 + x1) / 2 - 1190 * sc, t = (y0 + y1) / 2 - 540 * sc;
         l = dw <= W ? Math.min(Math.max(l, 0), W - dw) : Math.min(Math.max(l, W - dw), 0);

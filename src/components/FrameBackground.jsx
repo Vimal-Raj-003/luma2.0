@@ -1,23 +1,41 @@
 import { useEffect, useRef } from 'react'
-import { gsap, ScrollTrigger, REDUCE_QUERY } from '../lib/gsap'
-import { FRAME_COUNT, frameSrc } from '../data'
+import { gsap, ScrollTrigger, REDUCE_QUERY, MOBILE_QUERY } from '../lib/gsap'
+import { FRAME_COUNT, FRAME_PATH, frameSrc } from '../data'
 
 const SRC_W = 1920
 const SRC_H = 1080
 const LAST = FRAME_COUNT - 1
 const STILL_FRAME = 108 // stable, fully built glass shown when reduced motion is requested
 
-// Where each part of the page sits in the frame sequence (fraction of frames).
-// Scroll positions come from the sections' own ScrollTriggers.
+// Where each section starts, expressed as the frame that should be on screen (the hero ends with
+// milk splashing over the first layers; the CTA lands on the finished, topped glass). Positions come
+// from each section's ScrollTrigger; between them progress follows FRAME_PATH, not frame number.
+// After the hero the anchors are spaced so every section advances at about the same visible-change
+// per scroll distance (~3 units/100px measured on the footage), so no section feels fast or slow.
 const STOPS = [
   ['hero', 0],
-  ['flavours', 0.2],
-  ['ingredients', 0.4],
-  ['why', 0.6],
-  ['approach', 0.74],
-  ['testimonials', 0.84],
-  ['cta', 0.92],
+  ['flavours', 54],
+  ['ingredients', 69],
+  ['why', 78],
+  ['approach', 86],
+  ['testimonials', 92],
+  ['cta', 109],
 ]
+
+// visual progress (0..1) -> fractional frame index
+function pathToFrame(p) {
+  if (p <= 0) return 0
+  if (p >= 1) return LAST
+  let lo = 0
+  let hi = LAST
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (FRAME_PATH[mid] <= p) lo = mid
+    else hi = mid
+  }
+  const span = FRAME_PATH[hi] - FRAME_PATH[lo]
+  return lo + (span > 0 ? (p - FRAME_PATH[lo]) / span : 0)
+}
 
 // Contain-style framing. The glass (plus scoop and splash) occupies a fixed box in
 // the source frame; that box is fitted into a "safe rectangle" of the viewport so the
@@ -28,10 +46,13 @@ const BOX_CX = 1190
 const BOX_CY = 540
 
 function placement(cw, ch) {
-  const mobile = cw <= 900
-  const safe = mobile
-    ? { x0: cw * 0.06, x1: cw * 0.94, y0: ch * 0.22, y1: ch * 0.7 } // text lives below, heading above
-    : { x0: cw * 0.42, x1: cw * 0.97, y0: 84, y1: ch - 28 } // product right of centre, clear of the nav
+  const short = ch <= 520 // phones in landscape
+  const mobile = cw <= 900 && !short
+  const safe = short
+    ? { x0: cw * 0.56, x1: cw * 0.97, y0: 58, y1: ch - 10 } // text column on the left, glass whole on the right
+    : mobile
+      ? { x0: cw * 0.06, x1: cw * 0.94, y0: ch * 0.22, y1: ch * 0.7 } // text lives below, heading above
+      : { x0: cw * 0.42, x1: cw * 0.97, y0: 84, y1: ch - 28 } // product right of centre, clear of the nav
   const sc = Math.min((safe.x1 - safe.x0) / (BOX.x1 - BOX.x0), (safe.y1 - safe.y0) / (BOX.y1 - BOX.y0))
   const dw = SRC_W * sc
   const dh = SRC_H * sc
@@ -48,7 +69,7 @@ function buildSpec(el) {
   const ch = el.clientHeight || window.innerHeight
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   const p = placement(cw, ch)
-  const cap = cw <= 900 ? 960 : 1280
+  const cap = cw <= 900 || ch <= 520 ? 960 : 1280
   const bw = Math.min(SRC_W, cap, Math.max(320, Math.round(p.dw * dpr)))
   return { sx: 0, sy: 0, sw: SRC_W, sh: SRC_H, bw, bh: Math.round((bw * SRC_H) / SRC_W), aspect: cw / ch }
 }
@@ -156,9 +177,10 @@ export default function FrameBackground() {
       return true
     }
     let lastT = 0
+    const lowPower = window.matchMedia(MOBILE_QUERY).matches
     const tick = (time) => {
       // phones: cap redraws at ~30fps (smoothing still interpolates, the story is unchanged)
-      if (canvas.clientWidth <= 900 && time - lastT < 0.033) return
+      if (lowPower && time - lastT < 0.033) return
       lastT = time
       const idx = Math.min(LAST, Math.max(0, Math.round(proxy.frame)))
       if (idx !== s.lastDrawn && draw(idx)) {
@@ -224,25 +246,36 @@ export default function FrameBackground() {
       if (s.breaks) return s.breaks
       const max = ScrollTrigger.maxScroll(window)
       const pts = [[0, 0]]
-      for (const [id, f] of STOPS.slice(1)) {
+      for (const [id, frame] of STOPS.slice(1)) {
         const st = ScrollTrigger.getById(id)
-        if (st) pts.push([st.start, f])
+        if (st) pts.push([st.start, FRAME_PATH[frame]])
       }
       pts.push([max, 1])
       // keep strictly increasing in scroll position
       s.breaks = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1][0])
       return s.breaks
     }
-    const frameAt = (y) => {
+    const OPEN_PX = 160 // the opening ramp: gentle start, easing into the main curve
+    const pathAt = (y) => {
       const b = getBreaks()
       for (let i = 1; i < b.length; i++) {
         if (y <= b[i][0]) {
           const [y0, f0] = b[i - 1]
           const [y1, f1] = b[i]
-          return (f0 + ((y - y0) / (y1 - y0)) * (f1 - f0)) * LAST
+          let t = (y - y0) / (y1 - y0)
+          // hero segment: ease-out so early scroll already shows clear change
+          if (i === 1) t = 1 - Math.pow(1 - t, 1.7)
+          return f0 + t * (f1 - f0)
         }
       }
-      return LAST
+      return 1
+    }
+    const frameAt = (y) => {
+      let p = pathAt(y)
+      const b = getBreaks()
+      // first ~160px: a continuous ramp (frame 1 -> ~4 -> ~8 -> ~13 -> ~18) instead of a jump
+      if (y < OPEN_PX && b.length > 1 && b[1][0] > OPEN_PX) p = pathAt(OPEN_PX) * Math.pow(Math.max(y, 0) / OPEN_PX, 1.8)
+      return pathToFrame(p)
     }
     const sync = (jump) => {
       const target = frameAt(window.scrollY)
