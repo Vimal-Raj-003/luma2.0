@@ -19,16 +19,12 @@ export default function Hero() {
       gsap.set(q('.hero__cue'), { opacity: 0 })
     }, root)
 
-    // intro plays once the global frames have finished loading
+    // intro plays straight away — nothing waits on the frame preload
     const intro = gsap
-      .timeline({ paused: true })
+      .timeline({ delay: 0.1 })
       .to(q('.hero__eyebrow'), { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' })
       .to(q('.hero__logo .mask__in'), { yPercent: 0, duration: 1.2, stagger: 0.09, ease: 'power4.out' }, 0.1)
       .to(q('.hero__cue'), { opacity: 1, duration: 0.8 }, '-=0.3')
-    const play = () => intro.play()
-    if (window.__lumaReady) play()
-    else window.addEventListener('luma:ready', play, { once: true })
-
     const mm = gsap.matchMedia()
     mm.add({ mobile: MOBILE_QUERY, desktop: DESKTOP_QUERY }, (c) => {
       const { mobile } = c.conditions
@@ -54,7 +50,6 @@ export default function Hero() {
     })
 
     return () => {
-      window.removeEventListener('luma:ready', play)
       intro.kill()
       mm.revert()
       ctx.revert()

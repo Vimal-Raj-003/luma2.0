@@ -27,10 +27,6 @@ html {
   -webkit-text-size-adjust: 100%;
   overflow-x: clip;
 }
-html.is-loading {
-  overflow: hidden;
-}
-
 body {
   font-family: var(--font-body);
   color: var(--cream);
@@ -66,6 +62,7 @@ p {
 
 /* ---------- layering: canvas 0 → shade 1 → page 2 → nav 10 ---------- */
 .bgcanvas {
+  opacity: 0; /* revealed on first paint; the poster covers until then */
   position: fixed;
   top: 0;
   left: 0;
@@ -74,6 +71,9 @@ p {
   height: 100lvh;
   z-index: 0;
   pointer-events: none;
+}
+.bgcanvas.is-ready {
+  opacity: 1;
 }
 .bgshade {
   position: fixed;
@@ -173,9 +173,6 @@ p {
   border: 1px solid rgba(255, 243, 230, 0.14);
   transition: opacity 0.6s ease;
 }
-html.is-loading .nav {
-  opacity: 0;
-}
 .nav__logo {
   font-family: var(--font-display);
   font-weight: 700;
@@ -202,37 +199,6 @@ html.is-loading .nav {
 .nav__links .nav__order {
   background: linear-gradient(135deg, #ff5a70, #e0213f);
   opacity: 1;
-}
-
-/* ---------- loader ---------- */
-.loader {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-content: center;
-  gap: 18px;
-  text-align: center;
-  background: var(--wine);
-  transition: opacity 0.9s ease, visibility 0.9s;
-}
-.loader.is-done {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-.loader__logo {
-  font-family: var(--font-display);
-  font-size: clamp(2.6rem, 8vw, 5rem);
-  font-weight: 700;
-  letter-spacing: 0.3em;
-  padding-left: 0.3em;
-}
-.loader__bar {
-  font-size: 0.78rem;
-  letter-spacing: 0.3em;
-  color: var(--gold);
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- stage sections (all transparent over the canvas) ---------- */

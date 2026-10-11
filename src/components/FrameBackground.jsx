@@ -53,29 +53,32 @@ function buildSpec(el) {
 }
 
 async function loadFrames(spec, bag, onFrame, token) {
-  let next = 0
-  const worker = async () => {
-    while (next < FRAME_COUNT && !token.cancelled) {
-      const i = next++
+  const loadOne = async (i) => {
+    try {
+      const blob = await (await fetch(frameSrc(i))).blob()
+      let bmp
       try {
-        const blob = await (await fetch(frameSrc(i))).blob()
-        let bmp
-        try {
-          bmp = await createImageBitmap(blob, spec.sx, spec.sy, spec.sw, spec.sh, {
-            resizeWidth: spec.bw,
-            resizeHeight: spec.bh,
-            resizeQuality: 'high',
-          })
-        } catch {
-          bmp = await createImageBitmap(blob)
-        }
-        if (token.cancelled) bmp.close()
-        else bag[i] = bmp
+        bmp = await createImageBitmap(blob, spec.sx, spec.sy, spec.sw, spec.sh, {
+          resizeWidth: spec.bw,
+          resizeHeight: spec.bh,
+          resizeQuality: 'high',
+        })
       } catch {
-        /* a missing frame is covered by its nearest neighbour at draw time */
+        bmp = await createImageBitmap(blob)
       }
-      onFrame(i)
+      if (token.cancelled) bmp.close()
+      else bag[i] = bmp
+    } catch {
+      /* a missing frame is covered by its nearest neighbour at draw time */
     }
+    onFrame(i)
+  }
+  // the first frame goes alone and first so the hero paints immediately;
+  // everything else streams in silently behind it
+  await loadOne(0)
+  let next = 1
+  const worker = async () => {
+    while (next < FRAME_COUNT && !token.cancelled) await loadOne(next++)
   }
   await Promise.all(Array.from({ length: 6 }, worker))
 }
@@ -85,13 +88,10 @@ async function loadFrames(spec, bag, onFrame, token) {
 // rounded frame index changes. Nothing here touches React state.
 export default function FrameBackground() {
   const canvasRef = useRef(null)
-  const loaderRef = useRef(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
     const c2d = canvas.getContext('2d', { alpha: false })
-    const loaderEl = loaderRef.current
-    const pctEl = loaderEl.querySelector('[data-pct]')
 
     const s = {
       bag: new Array(FRAME_COUNT).fill(null),
@@ -101,6 +101,8 @@ export default function FrameBackground() {
       lastDrawn: -1,
       loaded: 0,
       ready: false,
+      painted: false,
+      bgSet: false,
       token: { cancelled: false },
       dead: false,
       breaks: null,
@@ -130,14 +132,15 @@ export default function FrameBackground() {
       const bmp = nearest(i)
       if (!bmp) return false
       const { left, top, dw, dh, feather } = s.pl
-      // soft backdrop: tiny copy of the frame, stretched to cover (reads as blur)
-      tinyCtx.drawImage(bmp, 0, 0, tiny.width, tiny.height)
+      // soft backdrop: the first frame (warm bokeh + table, no scoop), blurred and stretched
+      // edge-to-edge. It is static, so it never darkens into a black strip or ghosts a product.
+      if (!s.bgSet) {
+        tinyCtx.drawImage(s.bag[0] || bmp, 0, 0, tiny.width, tiny.height)
+        s.bgSet = !!s.bag[0]
+      }
       const k = Math.max(s.W / tiny.width, s.H / tiny.height)
       c2d.imageSmoothingEnabled = true
       c2d.drawImage(tiny, (s.W - tiny.width * k) / 2, (s.H - tiny.height * k) / 2, tiny.width * k, tiny.height * k)
-      // keep the backdrop ambient, not a second product
-      c2d.fillStyle = 'rgba(14, 5, 8, 0.62)'
-      c2d.fillRect(0, 0, s.W, s.H)
       // sharp, fully framed product
       if (feather) {
         tmpCtx.globalCompositeOperation = 'source-over'
@@ -153,7 +156,15 @@ export default function FrameBackground() {
     }
     const tick = () => {
       const idx = Math.min(LAST, Math.max(0, Math.round(proxy.frame)))
-      if (idx !== s.lastDrawn && draw(idx)) s.lastDrawn = idx
+      if (idx !== s.lastDrawn && draw(idx)) {
+        s.lastDrawn = idx
+        if (!s.painted) {
+          // first real paint: swap the poster for the canvas (identical framing, no flash)
+          s.painted = true
+          canvas.classList.add('is-ready')
+          document.getElementById('poster')?.classList.add('is-hidden')
+        }
+      }
     }
     gsap.ticker.add(tick)
     if (import.meta.env.DEV) window.__lumaFrame = () => [proxy.frame, s.lastDrawn] // dev-only debugging hook
@@ -249,23 +260,12 @@ export default function FrameBackground() {
     }
     ScrollTrigger.addEventListener('refresh', onRefresh)
 
-    // ---- loading --------------------------------------------------------
-    const finishLoad = () => {
-      if (s.ready) return
-      s.ready = true
-      loaderEl.classList.add('is-done')
-      document.documentElement.classList.remove('is-loading')
-      window.__lumaReady = true
-      window.dispatchEvent(new Event('luma:ready'))
-      ScrollTrigger.refresh()
-    }
+    // ---- background loading (silent) -------------------------------------
     const onFrame = () => {
       s.loaded++
-      pctEl.textContent = Math.round((s.loaded / FRAME_COUNT) * 100)
-      if (s.loaded === FRAME_COUNT) finishLoad()
+      if (s.loaded === FRAME_COUNT) s.ready = true // all bitmaps resident; safe to rebuild on big resizes
     }
 
-    document.documentElement.classList.add('is-loading')
     resizeCanvas()
     loadFrames(s.spec, s.bag, onFrame, s.token)
 
@@ -304,7 +304,6 @@ export default function FrameBackground() {
       globalST.kill()
       ScrollTrigger.removeEventListener('refresh', onRefresh)
       window.removeEventListener('resize', onResize)
-      document.documentElement.classList.remove('is-loading')
       s.bag.forEach((b) => b && b.close())
     }
   }, [])
@@ -313,12 +312,6 @@ export default function FrameBackground() {
     <>
       <canvas ref={canvasRef} className="bgcanvas" aria-hidden="true" />
       <div className="bgshade" aria-hidden="true" />
-      <div className="loader" ref={loaderRef} role="status" aria-live="polite">
-        <div className="loader__logo">LUMA</div>
-        <div className="loader__bar">
-          <span data-pct>0</span>%
-        </div>
-      </div>
     </>
   )
 }
