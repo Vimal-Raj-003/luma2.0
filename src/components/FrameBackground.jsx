@@ -37,14 +37,39 @@ function pathToFrame(p) {
   return lo + (span > 0 ? (p - FRAME_PATH[lo]) / span : 0)
 }
 
-// Contain-style framing. The glass (plus scoop and splash) occupies a fixed box in
-// the source frame; that box is fitted into a "safe rectangle" of the viewport so the
-// whole product stays visible at every size. Leftover space is filled by a soft,
-// blurred copy of the same frame (see draw()).
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
+const smoothstep = (t) => t * t * (3 - 2 * t)
+
+// ---- framing ---------------------------------------------------------------
+// The glass (plus scoop and splash) occupies a fixed box in the source frame.
 const BOX = { x0: 860, x1: 1520, y0: 40, y1: 1040 }
 const BOX_CX = 1190
 const BOX_CY = 540
+const HERO_CY = 610 // vertical centre of the glass (rim to base) through the hero frames
 
+// HERO framing: the real frame covers the whole viewport edge to edge (cover-fit), focused on the
+// glass so it is never cropped badly. No second layer, no blurred copy.
+const NARROW_COVER = 0.95 // narrow portrait phones: 5% inside the full cover scale (glass clears the screen edges)
+function coverPlacement(cw, ch) {
+  const short = ch <= 520
+  const portrait = cw <= 900 && !short
+  const narrow = portrait && cw <= 500
+  const sc = Math.max(cw / SRC_W, ch / SRC_H) * (narrow ? NARROW_COVER : 1)
+  const dw = SRC_W * sc
+  const dh = SRC_H * sc
+  const tx = portrait ? 0.5 : short ? 0.68 : 0.64 // glass sits right of centre when text is on the left
+  return {
+    left: dw >= cw ? clamp(tx * cw - BOX_CX * sc, cw - dw, 0) : (cw - dw) / 2,
+    // when the frame is a touch shorter than the screen (narrow phones) it is centred and the sliver
+    // above/below is filled with the frame's own edge pixels (see draw)
+    top: dh >= ch ? clamp(ch * 0.5 - HERO_CY * sc, ch - dh, 0) : (ch - dh) / 2,
+    dw,
+    dh,
+  }
+}
+
+// REST OF THE PAGE: contain-style framing. The product box is fitted into a "safe rectangle" of
+// the viewport so the whole glass stays visible behind the other sections' text.
 function placement(cw, ch) {
   const short = ch <= 520 // phones in landscape
   const mobile = cw <= 900 && !short
@@ -59,8 +84,8 @@ function placement(cw, ch) {
   let left = (safe.x0 + safe.x1) / 2 - BOX_CX * sc
   let top = (safe.y0 + safe.y1) / 2 - BOX_CY * sc
   // keep the frame inside the viewport when it is smaller, centred-in-range when larger
-  left = dw <= cw ? Math.min(Math.max(left, 0), cw - dw) : Math.min(Math.max(left, cw - dw), 0)
-  top = dh <= ch ? Math.min(Math.max(top, 0), ch - dh) : Math.min(Math.max(top, ch - dh), 0)
+  left = dw <= cw ? clamp(left, 0, cw - dw) : clamp(left, cw - dw, 0)
+  top = dh <= ch ? clamp(top, 0, ch - dh) : clamp(top, ch - dh, 0)
   return { left, top, dw, dh }
 }
 
@@ -68,10 +93,21 @@ function buildSpec(el) {
   const cw = el.clientWidth || window.innerWidth
   const ch = el.clientHeight || window.innerHeight
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-  const p = placement(cw, ch)
-  const cap = cw <= 900 || ch <= 520 ? 960 : 1280
-  const bw = Math.min(SRC_W, cap, Math.max(320, Math.round(p.dw * dpr)))
-  return { sx: 0, sy: 0, sw: SRC_W, sh: SRC_H, bw, bh: Math.round((bw * SRC_H) / SRC_W), aspect: cw / ch }
+  const aspect = cw / ch
+  // Narrow phones: decode only the band of the frame that either framing can ever show (the hero is a
+  // tight crop; the page framing shows cw / scale source pixels), at a higher scale. Sharper hero and
+  // a smaller footprint than the full frame; the band is no wider than needed for this exact screen.
+  if (cw <= 500 && ch > 520) {
+    const visible = (cw / placement(cw, ch).dw) * SRC_W // source px the page framing shows across
+    const sw = clamp(Math.round(visible + 40), 760, 1180)
+    const sx = clamp(Math.round(BOX_CX - sw / 2), 0, SRC_W - sw)
+    const bw = Math.round(sw * 0.72)
+    return { sx, sy: 0, sw, sh: SRC_H, bw, bh: Math.round(SRC_H * 0.72), aspect }
+  }
+  const dw = Math.max(placement(cw, ch).dw, coverPlacement(cw, ch).dw)
+  const cap = ch <= 520 ? 960 : 1280
+  const bw = Math.min(SRC_W, cap, Math.max(320, Math.round(dw * dpr)))
+  return { sx: 0, sy: 0, sw: SRC_W, sh: SRC_H, bw, bh: Math.round((bw * SRC_H) / SRC_W), aspect }
 }
 
 async function loadFrames(spec, bag, onFrame, token) {
@@ -88,8 +124,14 @@ async function loadFrames(spec, bag, onFrame, token) {
       } catch {
         bmp = await createImageBitmap(blob)
       }
+      const entry = { b: bmp, sx: spec.sx, sy: spec.sy, sw: spec.sw, sh: spec.sh }
+      if (bmp.width === SRC_W) Object.assign(entry, { sx: 0, sy: 0, sw: SRC_W, sh: SRC_H }) // fallback decode = whole frame
       if (token.cancelled) bmp.close()
-      else bag[i] = bmp
+      else {
+        const old = bag[i]
+        bag[i] = entry
+        if (old) old.b.close()
+      }
     } catch {
       /* a missing frame is covered by its nearest neighbour at draw time */
     }
@@ -106,8 +148,9 @@ async function loadFrames(spec, bag, onFrame, token) {
 }
 
 // ONE fixed canvas behind the whole page. A single ScrollTrigger maps the full
-// document scroll to a proxy `frame` value; a ticker redraws only when the
-// rounded frame index changes. Nothing here touches React state.
+// document scroll to a proxy `frame` value (and a `mix` value that eases the framing from the
+// hero's cover-fit into the page framing); a ticker redraws only when either changes.
+// Nothing here touches React state.
 export default function FrameBackground() {
   const canvasRef = useRef(null)
 
@@ -120,7 +163,10 @@ export default function FrameBackground() {
       spec: buildSpec(canvas),
       W: 0,
       H: 0,
+      F: 0,
+      base: null,
       lastDrawn: -1,
+      drawnMix: -1,
       loaded: 0,
       ready: false,
       painted: false,
@@ -128,18 +174,23 @@ export default function FrameBackground() {
       token: { cancelled: false },
       dead: false,
       breaks: null,
-      pl: { left: 0, top: 0, dw: 0, dh: 0, feather: false },
     }
     const tiny = document.createElement('canvas')
     tiny.width = 96
     tiny.height = 54
     const tinyCtx = tiny.getContext('2d')
+    const soft = document.createElement('canvas') // tiny, re-sampled in two steps so the upscale stays smooth
+    soft.width = 384
+    soft.height = 216
+    const softCtx = soft.getContext('2d')
+    softCtx.imageSmoothingQuality = 'high'
     const tmp = document.createElement('canvas')
     const tmpCtx = tmp.getContext('2d')
     const mask = document.createElement('canvas')
     const mctx = mask.getContext('2d')
-    const proxy = { frame: 0 }
+    const proxy = { frame: 0, mix: 1 } // mix: 1 = hero cover-fit, 0 = page framing
     const smooth = gsap.quickTo(proxy, 'frame', { duration: 0.7, ease: 'power3.out' })
+    const smoothMix = gsap.quickTo(proxy, 'mix', { duration: 0.6, ease: 'power3.out' })
 
     // ---- drawing --------------------------------------------------------
     const nearest = (i) => {
@@ -151,29 +202,92 @@ export default function FrameBackground() {
       return null
     }
     const draw = (i) => {
-      const bmp = nearest(i)
-      if (!bmp) return false
-      const { left, top, dw, dh, feather } = s.pl
-      // soft backdrop: the first frame (warm bokeh + table, no scoop), blurred and stretched
-      // edge-to-edge. It is static, so it never darkens into a black strip or ghosts a product.
-      if (!s.bgSet) {
-        tinyCtx.drawImage(s.bag[0] || bmp, 0, 0, tiny.width, tiny.height)
-        s.bgSet = !!s.bag[0]
+      const entry = nearest(i)
+      if (!entry) return false
+      const bmp = entry.b
+      const { W, H, F } = s
+      const m = smoothstep(clamp(proxy.mix, 0, 1))
+      const a = s.base.contain
+      const b = s.base.cover
+      const left = a.left + (b.left - a.left) * m
+      const top = a.top + (b.top - a.top) * m
+      const dw = a.dw + (b.dw - a.dw) * m
+      const k = dw / SRC_W
+      // where the decoded region lands on the canvas
+      const rx = left + entry.sx * k
+      const ry = top + entry.sy * k
+      const rw = entry.sw * k
+      const rh = entry.sh * k
+      const fits = rx <= 0.5 && ry <= 0.5 && rx + rw >= W - 0.5 && ry + rh >= H - 0.5
+      const heroState = m >= 0.999
+      if (!fits && !heroState) {
+        // Only when the frame is smaller than the viewport (page framing): a soft, static backdrop from
+        // the first frame fills the margin. The hero never draws this — its frame covers the screen.
+        if (!s.bgSet) {
+          tinyCtx.drawImage((s.bag[0] || entry).b, 0, 0, tiny.width, tiny.height)
+          softCtx.drawImage(tiny, 0, 0, 192, 108)
+          softCtx.drawImage(soft, 0, 0, 192, 108, 0, 0, soft.width, soft.height)
+          s.bgSet = !!s.bag[0]
+        }
+        const bk = Math.max(W / soft.width, H / soft.height)
+        c2d.imageSmoothingEnabled = true
+        c2d.drawImage(soft, (W - soft.width * bk) / 2, (H - soft.height * bk) / 2, soft.width * bk, soft.height * bk)
       }
-      const k = Math.max(s.W / tiny.width, s.H / tiny.height)
-      c2d.imageSmoothingEnabled = true
-      c2d.drawImage(tiny, (s.W - tiny.width * k) / 2, (s.H - tiny.height * k) / 2, tiny.width * k, tiny.height * k)
-      // sharp, fully framed product
-      if (feather) {
+      // the visible part of the frame, and the matching part of the bitmap
+      const vx = Math.max(0, Math.floor(rx))
+      const vy = Math.max(0, Math.floor(ry))
+      const vw = Math.min(W, Math.ceil(rx + rw)) - vx
+      const vh = Math.min(H, Math.ceil(ry + rh)) - vy
+      if (vw <= 0 || vh <= 0) return true
+      const sx = ((vx - rx) / rw) * bmp.width
+      const sy = ((vy - ry) / rh) * bmp.height
+      const sw = (vw / rw) * bmp.width
+      const sh = (vh / rh) * bmp.height
+      if (!fits && heroState) {
+        // hero: extend the real frame's top/bottom/side rows into the thin margin (no blur, no second layer)
+        const ex = Math.ceil(vy - 0) // top margin height
+        if (ry > 0.5) c2d.drawImage(bmp, sx, 0, sw, 1, vx, 0, vw, ex + 1)
+        if (ry + rh < H - 0.5) c2d.drawImage(bmp, sx, bmp.height - 1, sw, 1, vx, vy + vh - 1, vw, H - (vy + vh) + 1)
+        if (rx > 0.5) c2d.drawImage(bmp, 0, sy, 1, sh, 0, vy, vx + 1, vh)
+        if (rx + rw < W - 0.5) c2d.drawImage(bmp, bmp.width - 1, sy, 1, sh, vx + vw - 1, vy, W - (vx + vw) + 1, vh)
+      }
+      const fl = !heroState && rx > 1 ? F : 0
+      const fr = !heroState && rx + rw < W - 1 ? F : 0
+      const ft = !heroState && ry > 1 ? F : 0
+      const fb = !heroState && ry + rh < H - 1 ? F : 0
+      if (fl || fr || ft || fb) {
+        // feather the frame's open edges into the backdrop (scratch canvases allocated on first use)
+        if (tmp.width !== W || tmp.height !== H) {
+          tmp.width = mask.width = W
+          tmp.height = mask.height = H
+        }
         tmpCtx.globalCompositeOperation = 'source-over'
-        tmpCtx.clearRect(0, 0, tmp.width, tmp.height)
-        tmpCtx.drawImage(bmp, 0, 0, tmp.width, tmp.height)
+        tmpCtx.clearRect(0, 0, vw, vh)
+        tmpCtx.drawImage(bmp, sx, sy, sw, sh, 0, 0, vw, vh)
+        mctx.globalCompositeOperation = 'source-over'
+        mctx.clearRect(0, 0, vw, vh)
+        mctx.fillStyle = '#fff'
+        mctx.fillRect(0, 0, vw, vh)
+        mctx.globalCompositeOperation = 'destination-in'
+        const ramp = (horizontal, lo, hi) => {
+          const len = horizontal ? vw : vh
+          const g = horizontal ? mctx.createLinearGradient(0, 0, vw, 0) : mctx.createLinearGradient(0, 0, 0, vh)
+          g.addColorStop(0, lo ? 'rgba(0,0,0,0)' : '#000')
+          if (lo) g.addColorStop(Math.min(lo / len, 0.49), '#000')
+          if (hi) g.addColorStop(Math.max(1 - hi / len, 0.51), '#000')
+          g.addColorStop(1, hi ? 'rgba(0,0,0,0)' : '#000')
+          mctx.fillStyle = g
+          mctx.fillRect(0, 0, vw, vh)
+        }
+        if (fl || fr) ramp(true, fl, fr)
+        if (ft || fb) ramp(false, ft, fb)
         tmpCtx.globalCompositeOperation = 'destination-in'
-        tmpCtx.drawImage(mask, 0, 0)
-        c2d.drawImage(tmp, left, top)
+        tmpCtx.drawImage(mask, 0, 0, vw, vh, 0, 0, vw, vh)
+        c2d.drawImage(tmp, 0, 0, vw, vh, vx, vy, vw, vh)
       } else {
-        c2d.drawImage(bmp, left, top, dw, dh)
+        c2d.drawImage(bmp, sx, sy, sw, sh, vx, vy, vw, vh)
       }
+      s.drawnMix = proxy.mix
       return true
     }
     let lastT = 0
@@ -183,7 +297,7 @@ export default function FrameBackground() {
       if (lowPower && time - lastT < 0.033) return
       lastT = time
       const idx = Math.min(LAST, Math.max(0, Math.round(proxy.frame)))
-      if (idx !== s.lastDrawn && draw(idx)) {
+      if ((idx !== s.lastDrawn || Math.abs(proxy.mix - s.drawnMix) > 0.0005) && draw(idx)) {
         s.lastDrawn = idx
         if (!s.painted) {
           // first real paint: swap the poster for the canvas (identical framing, no flash)
@@ -194,7 +308,7 @@ export default function FrameBackground() {
       }
     }
     gsap.ticker.add(tick)
-    if (import.meta.env.DEV) window.__lumaFrame = () => [proxy.frame, s.lastDrawn] // dev-only debugging hook
+    if (import.meta.env.DEV) window.__lumaFrame = () => [proxy.frame, s.lastDrawn, proxy.mix] // dev-only debugging hook
 
     const resizeCanvas = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
@@ -203,41 +317,17 @@ export default function FrameBackground() {
       if (W === s.W && H === s.H) return
       s.W = canvas.width = W
       s.H = canvas.height = H
+      tmp.width = mask.width = 1 // released here, re-allocated at the new size if the framing ever needs it
+      tmp.height = mask.height = 1
       c2d.imageSmoothingQuality = 'high'
-      // placement in device pixels
-      const p = placement(canvas.clientWidth, canvas.clientHeight)
+      // both framings in device pixels
       const k = W / canvas.clientWidth
-      const pl = { left: p.left * k, top: p.top * k, dw: p.dw * k, dh: p.dh * k }
-      const F = Math.round(Math.min(W, H) * 0.07)
-      const fl = pl.left > 1 ? F : 0
-      const fr = pl.left + pl.dw < W - 1 ? F : 0
-      const ft = pl.top > 1 ? F : 0
-      const fb = pl.top + pl.dh < H - 1 ? F : 0
-      pl.feather = fl || fr || ft || fb
-      s.pl = pl
-      if (pl.feather) {
-        const mw = Math.max(1, Math.round(pl.dw))
-        const mh = Math.max(1, Math.round(pl.dh))
-        tmp.width = mask.width = mw
-        tmp.height = mask.height = mh
-        mctx.globalCompositeOperation = 'source-over'
-        mctx.clearRect(0, 0, mw, mh)
-        mctx.fillStyle = '#fff'
-        mctx.fillRect(0, 0, mw, mh)
-        mctx.globalCompositeOperation = 'destination-in'
-        const ramp = (horizontal, a, b) => {
-          const len = horizontal ? mw : mh
-          const g = horizontal ? mctx.createLinearGradient(0, 0, mw, 0) : mctx.createLinearGradient(0, 0, 0, mh)
-          g.addColorStop(0, a ? 'rgba(0,0,0,0)' : '#000')
-          if (a) g.addColorStop(Math.min(a / len, 0.49), '#000')
-          if (b) g.addColorStop(Math.max(1 - b / len, 0.51), '#000')
-          g.addColorStop(1, b ? 'rgba(0,0,0,0)' : '#000')
-          mctx.fillStyle = g
-          mctx.fillRect(0, 0, mw, mh)
-        }
-        if (fl || fr) ramp(true, fl, fr)
-        if (ft || fb) ramp(false, ft, fb)
+      const toDev = (p) => ({ left: p.left * k, top: p.top * k, dw: p.dw * k, dh: p.dh * k })
+      s.base = {
+        contain: toDev(placement(canvas.clientWidth, canvas.clientHeight)),
+        cover: toDev(coverPlacement(canvas.clientWidth, canvas.clientHeight)),
       }
+      s.F = Math.round(Math.min(W, H) * 0.07)
       s.lastDrawn = -1
     }
 
@@ -277,17 +367,33 @@ export default function FrameBackground() {
       if (y < OPEN_PX && b.length > 1 && b[1][0] > OPEN_PX) p = pathAt(OPEN_PX) * Math.pow(Math.max(y, 0) / OPEN_PX, 1.8)
       return pathToFrame(p)
     }
-    const sync = (jump) => {
-      const target = frameAt(window.scrollY)
-      if (jump) {
-        gsap.killTweensOf(proxy)
-        proxy.frame = target
-      } else smooth(target)
+    // framing mix: the hero keeps the cover-fit for its whole pin, then eases into the page framing
+    // while the hero scrolls away and the first section arrives
+    const mixAt = (y) => {
+      const hero = ScrollTrigger.getById('hero')
+      const next = ScrollTrigger.getById('flavours')
+      const from = hero ? hero.end : window.innerHeight * 0.4
+      const to = next ? next.start : window.innerHeight * 1.1
+      if (y <= from) return 1
+      if (y >= to || to <= from) return 0
+      return 1 - (y - from) / (to - from)
     }
-
     const reduce = window.matchMedia(REDUCE_QUERY).matches
     if (reduce) proxy.frame = STILL_FRAME
-    const globalST = reduce ? null : ScrollTrigger.create({
+    const sync = (jump) => {
+      const y = window.scrollY
+      const mix = mixAt(y)
+      if (jump) {
+        gsap.killTweensOf(proxy)
+        if (!reduce) proxy.frame = frameAt(y)
+        proxy.mix = mix
+      } else {
+        if (!reduce) smooth(frameAt(y))
+        smoothMix(mix)
+      }
+    }
+
+    const globalST = ScrollTrigger.create({
       id: 'global-frames',
       trigger: document.documentElement,
       start: 0,
@@ -298,7 +404,7 @@ export default function FrameBackground() {
       s.breaks = null
       sync(true)
     }
-    if (!reduce) ScrollTrigger.addEventListener('refresh', onRefresh)
+    ScrollTrigger.addEventListener('refresh', onRefresh)
 
     // ---- background loading (silent) -------------------------------------
     const onFrame = () => {
@@ -319,18 +425,15 @@ export default function FrameBackground() {
         const next = buildSpec(canvas)
         const grew = next.bw > s.spec.bw * 1.35
         const reshaped = Math.abs(next.aspect / s.spec.aspect - 1) > 0.06
-        if (!grew && !reshaped) return
+        const recropped = next.sw !== s.spec.sw
+        if (!grew && !reshaped && !recropped) return
         s.token.cancelled = true
         const token = { cancelled: false }
         s.token = token
-        const bag = new Array(FRAME_COUNT).fill(null)
-        await loadFrames(next, bag, () => {}, token)
-        if (token.cancelled || s.dead) return
-        const old = s.bag
-        s.bag = bag
         s.spec = next
-        s.lastDrawn = -1
-        old.forEach((b) => b && b.close())
+        // upgrade in place: each frame is swapped (and its old bitmap closed) the moment its
+        // replacement is decoded, so memory never holds two complete sets
+        await loadFrames(next, s.bag, () => { s.lastDrawn = -1 }, token)
       }, 450)
     }
     window.addEventListener('resize', onResize)
@@ -341,10 +444,10 @@ export default function FrameBackground() {
       clearTimeout(rt)
       gsap.ticker.remove(tick)
       gsap.killTweensOf(proxy)
-      globalST?.kill()
+      globalST.kill()
       ScrollTrigger.removeEventListener('refresh', onRefresh)
       window.removeEventListener('resize', onResize)
-      s.bag.forEach((b) => b && b.close())
+      s.bag.forEach((e) => e && e.b.close())
     }
   }, [])
 

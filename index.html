@@ -17,24 +17,20 @@
       html,body{background:#1c0a0d}
       #poster{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;z-index:0;pointer-events:none;overflow:hidden;background:#0e0508;transition:opacity .35s ease}
       #poster img{position:absolute;max-width:none;display:block}
-      #poster #poster-img{-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent),linear-gradient(180deg,transparent,#000 6%,#000 94%,transparent);-webkit-mask-composite:source-in;mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent),linear-gradient(180deg,transparent,#000 6%,#000 94%,transparent);mask-composite:intersect}
-      #poster #poster-bg{inset:-6%;width:112%;height:112%;object-fit:cover;object-position:62% 50%;filter:blur(28px)}
       #poster.is-hidden{opacity:0}
     </style>
     <title>LUMA — Layers of Happiness</title>
   </head>
   <body>
-    <!-- Frame 1 shown instantly (before any JS). Framing mirrors placement() in FrameBackground.jsx -->
-    <div id="poster" aria-hidden="true"><img id="poster-bg" src="/hero_frames/ezgif-frame-001.jpg" alt="" decoding="async" draggable="false" /><img id="poster-img" src="/hero_frames/ezgif-frame-001.jpg" alt="" fetchpriority="high" decoding="async" draggable="false" /></div>
+    <!-- Frame 1 shown instantly (before any JS), cover-fit like the hero canvas. Framing mirrors coverPlacement() in FrameBackground.jsx -->
+    <div id="poster" aria-hidden="true"><img id="poster-img" src="/hero_frames/ezgif-frame-001.jpg" alt="" fetchpriority="high" decoding="async" draggable="false" /></div>
     <script>
       (function () {
-        var W = innerWidth, H = innerHeight, sh = H <= 520, m = W <= 900 && !sh;
-        var x0 = sh ? W * 0.56 : m ? W * 0.06 : W * 0.42, x1 = sh ? W * 0.97 : m ? W * 0.94 : W * 0.97;
-        var y0 = sh ? 58 : m ? H * 0.22 : 84, y1 = sh ? H - 10 : m ? H * 0.7 : H - 28;
-        var sc = Math.min((x1 - x0) / 660, (y1 - y0) / 1000), dw = 1920 * sc, dh = 1080 * sc;
-        var l = (x0 + x1) / 2 - 1190 * sc, t = (y0 + y1) / 2 - 540 * sc;
-        l = dw <= W ? Math.min(Math.max(l, 0), W - dw) : Math.min(Math.max(l, W - dw), 0);
-        t = dh <= H ? Math.min(Math.max(t, 0), H - dh) : Math.min(Math.max(t, H - dh), 0);
+        var W = innerWidth, H = innerHeight, sh = H <= 520, pt = W <= 900 && !sh;
+        var sc = Math.max(W / 1920, H / 1080) * (pt && W <= 500 ? 0.95 : 1), dw = 1920 * sc, dh = 1080 * sc;
+        var tx = pt ? 0.5 : sh ? 0.68 : 0.64;
+        var l = dw >= W ? Math.min(Math.max(tx * W - 1190 * sc, W - dw), 0) : (W - dw) / 2;
+        var t = dh >= H ? Math.min(Math.max(H * 0.5 - 610 * sc, H - dh), 0) : (H - dh) / 2;
         var i = document.getElementById('poster-img').style;
         i.left = l + 'px'; i.top = t + 'px'; i.width = dw + 'px'; i.height = dh + 'px';
       })();
